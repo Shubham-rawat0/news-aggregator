@@ -1,0 +1,240 @@
+from datetime import datetime , timedelta , timezone
+from typing import List, Optional, Dict , Any
+from sqlalchemy import and_
+from sqlalchemy.orm import Session
+from .models import YouTubeVideo , OpenAIArticle , AnthropicArticle ,Digest
+from .connection import get_session
+
+class Repository:
+    def __init__(self, session:Optional[Session]=None):
+        self.session=session or get_session()
+    
+    def create_youtube_video(self,video_id:str,title:str,url:str,channel_id: str, 
+                            published_at: datetime, description: str = "", transcript: Optional[str] = None) -> Optional[YouTubeVideo]:
+        existing = self.session.query(YouTubeVideo).filter_by(video_id=video_id).first()
+        if existing:
+            return None
+        
+        video = YouTubeVideo(
+            video_id=video_id,
+            title=title,
+            url=url,
+            channel_id=channel_id,
+            published_at=published_at,
+            description=description,
+            transcript=transcript
+        )
+
+        self.session.add(video)
+        self.session.commit()
+        return video
+    
+    def create_openai_article(self, guid: str, title: str, url: str, published_at: datetime,
+                              description: str = "", category: Optional[str] = None) -> Optional[OpenAIArticle]:
+        existing = self.session.query(OpenAIArticle).filter_by(guid=guid).first()
+        if existing:
+            return None
+        article = OpenAIArticle(
+            guid=guid,
+            title=title,
+            url=url,
+            published_at=published_at,
+            description=description,
+            category=category
+        )
+        self.session.add(article)
+        self.session.commit()
+        return article
+    
+    def create_anthropic_article(self, guid: str, title: str, url: str, published_at: datetime,
+                                description: str = "", category: Optional[str] = None) -> Optional[AnthropicArticle]:
+        existing = self.session.query(AnthropicArticle).filter_by(guid=guid).first()
+        if existing:
+            return None
+        article = AnthropicArticle(
+            guid=guid,
+            title=title,
+            url=url,
+            published_at=published_at,
+            description=description,
+            category=category
+        )
+        self.session.add(article)
+        self.session.commit()
+        return article
+    
+    def bulk_create_youtube_videos(self,videos:List[Dict])->int:
+        new_videos = []
+        for v in videos:
+            existing = self.session.query(YouTubeVideo).filter_by(video_id=v["video_id"]).first()
+            if not existing:
+                new_videos.append(YouTubeVideo(
+                    video_id=v["video_id"],
+                    title=v["title"],
+                    url=v["url"],
+                    channel_id=v.get("channel_id", ""),
+                    published_at=v["published_at"],
+                    description=v.get("description", ""),
+                    transcript=v.get("transcript")
+                ))
+            if new_videos:
+                self.session.add_all(new_videos)
+                self.session.commit()
+            return len(new_videos)
+        
+    def bulk_create_anthropic_articles(self, articles: List[dict]) -> int:
+        new_articles = []
+        for a in articles:
+            existing = self.session.query(AnthropicArticle).filter_by(guid=a["guid"]).first()
+            if not existing:
+                new_articles.append(AnthropicArticle(
+                    guid=a["guid"],
+                    title=a["title"],
+                    url=a["url"],
+                    published_at=a["published_at"],
+                    description=a.get("description", ""),
+                    category=a.get("category")
+                ))
+        if new_articles:
+            self.session.add_all(new_articles)
+            self.session.commit()
+        return len(new_articles)
+    
+    def bulk_create_openai_articles(self, articles: List[dict]) -> int:
+        new_articles = []
+        for a in articles:
+            existing = self.session.query(OpenAIArticle).filter_by(guid=a["guid"]).first()
+            if not existing:
+                new_articles.append(OpenAIArticle(
+                    guid=a["guid"],
+                    title=a["title"],
+                    url=a["url"],
+                    published_at=a["published_at"],
+                    description=a.get("description", ""),
+                    category=a.get("category")
+                ))
+        if new_articles:
+            self.session.add_all(new_articles)
+            self.session.commit()
+        return len(new_articles)
+    
+    def get_anthropic_articles_without_markdown(self , limit:Optional[int]=None)->List[AnthropicArticle]:
+        query=self.session.query(AnthropicArticle).filter(AnthropicArticle.markdown.is_(None))
+        if limit:
+            query=query.limit(limit)
+        return query.all()
+    
+    def update_anthropic_article_markdown(self, guid: str, markdown: str) -> bool:
+        article = self.session.query(AnthropicArticle).filter_by(guid=guid).first()
+        if article:
+            article.markdown = markdown
+            self.session.commit()
+            return True
+        return False
+    
+    def get_youtube_videos_without_transcript(self, limit: Optional[int] = None) -> List[YouTubeVideo]:
+        query = self.session.query(YouTubeVideo).filter(YouTubeVideo.transcript.is_(None))
+        if limit:
+            query = query.limit(limit)
+        return query.all()
+    
+    def update_youtube_video_transcript(self, video_id: str, transcript: str) -> bool:
+        video = self.session.query(YouTubeVideo).filter_by(video_id=video_id).first()
+        if video:
+            video.transcript = transcript
+            self.session.commit()
+            return True
+        return False
+    
+    def get_articles_without_digest(
+        self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+
+        articles: List[Dict[str, Any]] = []
+        remaining = limit if limit else None
+
+        yt_query = self.session.query(YouTubeVideo).filter(
+            YouTubeVideo.transcript.isnot(None),
+            YouTubeVideo.transcript != "__UNAVAILABLE__",
+            ~self.session.query(Digest).filter(
+                and_(
+                    Digest.article_type == "youtube",
+                    Digest.article_id == YouTubeVideo.video_id
+                )
+            ).exists()
+        ).order_by(YouTubeVideo.published_at.desc())
+
+        if remaining:
+            yt_query = yt_query.limit(remaining)
+
+        youtube_videos = yt_query.all()
+
+        for video in youtube_videos:
+            articles.append({
+                "type": "youtube",
+                "id": video.video_id,
+                "title": video.title,
+                "url": video.url,
+                "content": video.transcript or video.description or "",
+                "published_at": video.published_at
+            })
+
+        if remaining:
+            remaining -= len(youtube_videos)
+            if remaining <= 0:
+                return articles
+
+        oa_query = self.session.query(OpenAIArticle).filter(
+            ~self.session.query(Digest).filter(
+                and_(
+                    Digest.article_type == "openai",
+                    Digest.article_id == OpenAIArticle.guid
+                )
+            ).exists()
+        ).order_by(OpenAIArticle.published_at.desc())
+
+        if remaining:
+            oa_query = oa_query.limit(remaining)
+
+        openai_articles = oa_query.all()
+
+        for article in openai_articles:
+            articles.append({
+                "type": "openai",
+                "id": article.guid,
+                "title": article.title,
+                "url": article.url,
+                "content": article.description or "",
+                "published_at": article.published_at
+            })
+
+        if remaining:
+            remaining -= len(openai_articles)
+            if remaining <= 0:
+                return articles
+
+        an_query = self.session.query(AnthropicArticle).filter(
+            AnthropicArticle.markdown.isnot(None),
+            ~self.session.query(Digest).filter(
+                and_(
+                    Digest.article_type == "anthropic",
+                    Digest.article_id == AnthropicArticle.guid
+                )
+            ).exists()
+        ).order_by(AnthropicArticle.published_at.desc())
+
+        if remaining:
+            an_query = an_query.limit(remaining)
+
+        anthropic_articles = an_query.all()
+
+        for article in anthropic_articles:
+            articles.append({
+                "type": "anthropic",
+                "id": article.guid,
+                "title": article.title,
+                "url": article.url,
+                "content": article.markdown or article.description or "",
+                "published_at": article.published_at
+            })
+
+        return articles
