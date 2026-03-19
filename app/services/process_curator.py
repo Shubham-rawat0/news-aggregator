@@ -19,7 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def curate_digests(hours: int = 24) -> dict:
+def curate_digests(hours: int = 48) -> dict:
     curator = CuratorAgent(USER_PROFILE)
     repo = Repository()
     
@@ -66,7 +66,7 @@ def curate_digests(hours: int = 24) -> dict:
 
 
 if __name__ == "__main__":
-    result = curate_digests(hours=24)
+    result = curate_digests(hours=48)
     print(f"\n=== Curation Results ===")
     print(f"Total digests: {result['total']}")
     print(f"Ranked: {result['ranked']}")

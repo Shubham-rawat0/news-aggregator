@@ -57,7 +57,7 @@ class YouTubeScraper:
         except Exception:
             return None
 
-    def get_latest_videos(self, channel_id: str, hours: int = 24) -> list[ChannelVideo]:
+    def get_latest_videos(self, channel_id: str, hours: int = 48) -> list[ChannelVideo]:
         feed = feedparser.parse(self._get_rss_url(channel_id))
         if not feed.entries:
             return []

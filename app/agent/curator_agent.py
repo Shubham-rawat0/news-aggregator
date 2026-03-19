@@ -1,9 +1,8 @@
 import os
 from typing import List
-from openai import OpenAI
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
 import json
 
 load_dotenv()
@@ -37,11 +36,9 @@ Scoring Guidelines:
 
 Rank articles from most relevant (rank 1) to least relevant. Ensure each article has a unique rank."""
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
 class CuratorAgent:
     def __init__(self, user_profile: dict):
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
+        self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         self.user_profile = user_profile
         self.system_prompt = self._build_system_prompt()
 
@@ -92,9 +89,10 @@ Order from most to least relevant.
 """
 
         try:
-            response = self.model.generate_content(
-                self.system_prompt + "\n\n" + user_prompt,
-                generation_config={
+            response = self.client.models.generate_content(
+                model="gemini-1.5-flash-latest",
+                contents=self.system_prompt + "\n\n" + user_prompt,
+                config={
                     "temperature": 0.3
                 }
             )

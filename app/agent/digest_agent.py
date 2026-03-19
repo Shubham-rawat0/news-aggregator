@@ -2,7 +2,7 @@ import os
 from typing import Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
 import re
 import json
 
@@ -24,11 +24,9 @@ Guidelines:
 - Use clear, accessible language while maintaining technical accuracy
 - Avoid marketing fluff - focus on substance"""
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
 class DigestAgent:
     def __init__(self):
-        self.model = genai.GenerativeModel("gemini-1.5-flash") 
+        self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         self.system_prompt = PROMPT
 
     def generate_digest(self, title: str, content: str, article_type: str) -> Optional[DigestOutput]:
@@ -47,9 +45,10 @@ Return STRICT JSON in this format:
 }}
 """
 
-            response = self.model.generate_content(
-                self.system_prompt + "\n\n" + user_prompt,
-                generation_config={
+            response = self.client.models.generate_content(
+                model="gemini-1.5-flash-latest",
+                contents=self.system_prompt + "\n\n" + user_prompt,
+                config={
                     "temperature": 0.7
                 }
             )

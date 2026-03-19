@@ -17,7 +17,7 @@ class OpenAIScraper:
         self.rss_url ="https://openai.com/news/rss.xml"
         self.converter= DocumentConverter()
 
-    def get_articles(self,hours:int=24)->List[OpenAIArticle]:
+    def get_articles(self,hours:int=48)->List[OpenAIArticle]:
         feed=feedparser.parse(self.rss_url)
         if not feed.entries:
             return []

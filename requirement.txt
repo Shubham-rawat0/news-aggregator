@@ -1,0 +1,12 @@
+beautifulsoup4
+docling
+feedparser
+markdown
+markdownify
+google-genai
+psycopg2-binary
+pydantic
+python-dotenv
+requests
+sqlalchemy
+youtube-transcript-api

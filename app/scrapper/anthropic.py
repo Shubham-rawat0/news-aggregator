@@ -21,7 +21,7 @@ class AnthropicScraper:
         ]
         self.converter = DocumentConverter()
 
-    def get_articles(self, hours:int=24)->List[AnthropicArticle]:
+    def get_articles(self, hours:int=48)->List[AnthropicArticle]:
         now = datetime.now(timezone.utc)
         cutoff_time = now - timedelta(hours=hours)
         articles = []
